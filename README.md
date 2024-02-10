@@ -6,4 +6,4 @@
 
 #How to push to github: 
 
-'cd Desktop' 
+```cd Desktop```
