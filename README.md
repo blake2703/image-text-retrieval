@@ -14,6 +14,7 @@ Then check status
  Add your modified file (DO NOT PUSH DATASET ONTO GITHUB)
 
  ```git add Unsupervised\ entity\ alignment\ for\ text-image\ retrieval.ipynb```
+ <br />
  ^^ the file you want to push will be in modified (after entering git status) so shortcut: U (tab) 
 
  Commit 
