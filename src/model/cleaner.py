@@ -1,14 +1,17 @@
 import pandas as pd
 import os
+import sys
 import logging
 import contractions
 import string
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-from transformers import BertTokenizer
 import warnings
 warnings.filterwarnings('ignore')
+
+
+sys.path.append(os.getcwd())
 
 # configure logger
 logging.basicConfig(level=logging.INFO,  # Set the logging level
@@ -23,6 +26,7 @@ class Cleaner:
         """
         Constructor
         """
+        assert tokenizer is not None, "Tokenizer must be provided"
         self.tokenizer = tokenizer
     
     def clean(self) -> pd.DataFrame:
@@ -32,31 +36,38 @@ class Cleaner:
             pd.DataFrame: _description_
         """
         try:
-            data_raw = pd.read_csv(f"{os.getcwd()}/results.csv",
-                                   delimiter="|")
+            data_raw = pd.read_csv(f"{os.getcwd()}/results.csv", delimiter="|")
+            logging.info("Attempting to clean text data")
+            
+            data_copy = data_raw # df to change 
+            data_copy.columns = data_copy.columns.str.replace(' ', '')
+            
+            assert all(col in data_copy.columns for col in ['comment', 'image_name', 'comment_number']), "Required columns are missing"
+            assert len(data_copy['image_name'].unique().tolist()) * 5 == len(data_copy)
+            
         except FileNotFoundError:
-            logging.error(f"File not found... please put the results.csv file in the right location")
+            logging.error("File not found... please put the results.csv file in the right location")
+            return None
+        except pd.errors.EmptyDataError:
+            logging.error("File is empty")
+            return None
+        except pd.errors.ParserError:
+            logging.error("Error parsing the file")
             return None
         
-        data_copy = data_raw # df to change 
         
-        logging.info("Attempting to clean text data")
-        
-        data_copy.columns = data_copy.columns.str.replace(' ', '')
-        
-
-        # fix this later (automate it)
-        data_copy.loc[19999, 'image_name'] = '2199200615.jpg'
-        data_copy.loc[19999, 'comment_number'] = '4'
-        data_copy.loc[19999, 'comment'] = 'A dog runs across the grass.'
-        
-        assert len(data_copy['image_name'].unique().tolist()) * 5 == len(data_copy) # assert there is 5 comments per image
+        # fix the one error with numerical value
+        self.fix_manual_entries(data_copy)
         assert not data_raw.isnull().values.all()
-        assert 'comment' in data_copy.columns
         
-        # TODO ASSERT ALL OTHER INITIAL COLUMNS
-        
+        logging.info(f"After initial clean, df shape: {data_copy.shape}")
         return data_copy
+    
+    def fix_manual_entries(self, df: pd.DataFrame) -> None:
+        """Fix specific entries in the DataFrame."""
+        df.loc[19999, 'image_name'] = '2199200615.jpg'
+        df.loc[19999, 'comment_number'] = '4'
+        df.loc[19999, 'comment'] = 'A dog runs across the grass.'
 
     def preprocess_comment(self,
                            comment: str) -> str:
@@ -99,6 +110,8 @@ class Cleaner:
             input_ids = self.tokenizer.encode(i, add_special_tokens=True)
             max_len = max(max_len, len(input_ids))
         return max_len
+    
+    
         
         
     def feature_engineer(self,
@@ -118,17 +131,16 @@ class Cleaner:
         logging.info(f"Attempting feature engineering")
         
         df['cleaned_comment'] = df['comment'].apply(self.preprocess_comment)
-        assert 'cleaned_comment' in df.columns
+        # assert 'cleaned_comment' in df.columns
         
         results = df['cleaned_comment'].apply(lambda comment: self.generate_masks_ids(comment, self.find_max_length(df=df)))
         df['input_ids'], df['attention_mask'] = zip(*results)
-        assert 'input_ids' and 'attention_mask' in df.columns
+        # assert 'input_ids' and 'attention_mask' in df.columns
+        
+        # generate image path column
+        image_root_path = f"{os.getcwd()}/flickr30k_images/"
+        df['image_path'] = image_root_path + df['image_name']
+        # assert 'image_path' in df.columns
    
+        logging.info(f"After feature engineering, df shape: {df.shape}")
         return df
-        
-        
-# testing
-cleaner = Cleaner(tokenizer=BertTokenizer.from_pretrained('bert-base-uncased', do_lower_case=True))
-df = cleaner.clean()
-df = cleaner.feature_engineer(df=df, sample_size=20)
-print(df)
