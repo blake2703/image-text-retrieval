@@ -1,4 +1,4 @@
-function S = FINAL(A1, A2, N1, N2, E1, E2, H, alpha, maxiter, tol)
+function S = runFINAL(A1, A2, N1, N2, E1, E2, H, alpha, maxiter, tol)
 % Description:
 %   The algorithm is the generalized attributed network alignment algorithm.
 %   The algorithm can handle the cases no matter node attributes and/or edge
@@ -45,8 +45,8 @@ function S = FINAL(A1, A2, N1, N2, E1, E2, H, alpha, maxiter, tol)
 %   Zhang, Si, and Hanghang Tong. "FINAL: Fast Attributed Network Alignment." 
 %   Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining. ACM, 2016.
 
-
 n1 = size(A1, 1); n2 = size(A2, 1);
+
 
 % If no node attributes input, then initialize as a vector of 1
 % so that all nodes are treated to have the save attributes which 
@@ -68,10 +68,12 @@ if isempty(E1) && isempty(E2)
 end
     
 K = size(N1, 2); L = size(E1, 2);
+% disp(N1)
 
 T1 = spconvert([n1, n1, 0]);
 T2 = spconvert([n2, n2, 0]);
-
+% disp(T1)
+% fprintf('%d\n', dispT1);
 
 % Normalize edge feature vectors 
 
@@ -80,31 +82,16 @@ for l = 1: L
     T2 = T2 + E2{l}.^2; % calculate ||v2||_2^2
 end
 T1 = spfun(@(x) 1./sqrt(x), T1); T2 = spfun(@(x) 1./sqrt(x), T2);
-
-
 for l = 1: L
    E1{l} = E1{l} .* T1; % normalize each entry by vector norm T1
    E2{l} = E2{l} .* T2; % normalize each entry by vector norm T2
 end
 
-
-
-
 % Normalize node feature vectors
 K1 = sum(N1.^2, 2).^(-0.5); K1(K1 == Inf) = 0;
-
-
 K2 = sum(N2.^2, 2).^(-0.5); K2(K2 == Inf) = 0;
-
-
-
 N1 = bsxfun(@times, K1, N1); % normalize the node attribute for A1
-
-
 N2 = bsxfun(@times, K2, N2); % normalize the node attribute for A2
-
-
-
 
 % Compute node feature cosine cross-similarity
 N = spconvert([n1*n2, 1, 0]);
@@ -112,44 +99,26 @@ for k = 1: K
     N = N + kron(N1(:, k), N2(:, k));   % compute N as a kronecker similarity
 end
 
-
-
 % Compute the Kronecker degree vector
 d = spconvert([n1*n2, 1, 0]);
-
-
 tic;
 for l = 1: L
     for k = 1: K 
         d = d + kron((E1{l} .* A1) * N1(:, k), (E2{l} .* A2) * N2(:,k));
     end
 end
-
-
-
-
-
 fprintf('Time for degree: %.2f sec\n', toc);
 D = N .* d; DD = D.^(-0.5);
-
-
-
 DD(D == 0) = 0;     % define inf to 0
 
 % fixed-point solution
-q = DD .* N;
-
-
-
+q = DD .* N; 
 h = H(:); s = h;
-
-
 
 for i = 1: maxiter
     fprintf('iteration %d\n', i);
     tic;
     prev = s;
-    
     M = reshape(q.*s, n2, n1);
     S = spconvert([n2, n1, 0]);
     for l = 1: L
@@ -158,13 +127,18 @@ for i = 1: maxiter
     s = (1 - alpha) * h + alpha * q .* S(:);   % add the prior part
     diff = norm(s-prev);
     
-    fprintf('Time for iteration %d: %.2f sec, diff = %.5f\n', i, toc, 100*diff);
-    
-    
-
+    fprintf('Time for iteration %d: %.2f sec, diff = %.5f\n', i, toc);
     if diff < tol   % if converge
         break;
     end
 end
 
 S = reshape(s, n2, n1);   % reshape the similarity vector to a matrix
+
+end 
+
+
+S = FINAL(A1, A2, A1, A2, E1, E2, H, alpha, maxiter, tol);
+
+
+disp(S);
